@@ -4,84 +4,76 @@ parser = argparse.ArgumentParser(description='Eval model outputs')
 parser.add_argument('-model', 	 	dest = "model", required=True,				help='Dataset to use')
 parser.add_argument('-eval_mode', 	 	dest = "eval_mode", required=True,		help='To evaluate test or validation')
 parser.add_argument('-test_freq', 	dest = "freq", 	required=True,	type =int,  help='what is to be predicted')
-
-#parser.add_argument('-entity2id'  , dest="entity2id", 		required=True,			help='Entity 2 id')
-#parser.add_argument('-relation2id', dest="relation2id", 	required=True,			help=' relation to id')
 args = parser.parse_args()
 
-best_rank = sys.maxsize	
+# Initialize `best` values as maximum possible.
+best_rank, best_epoch,best_tail_rank,best_head_rank = sys.maxsize	
+
 print(args.model)
+
 for k in range(args.freq,30000,args.freq):
-	valid_output = open('results/'+args.model+'/'+args.eval_mode+'.txt')
-	model_output_head = open('results/'+args.model+'/'+args.eval_mode+'_head_pred_{}.txt'.format(k))
-	model_output_tail = open('results/'+args.model+'/'+args.eval_mode+'_tail_pred_{}.txt'.format(k))
-	model_out_head = []
-	model_out_tail = []
-	count = 0
-	for line in model_output_head:
-	    count = 0
-	    temp_out = []
-	    for ele in line.split():
-	        tup  = (float(ele),count)
-	        temp_out.append(tup)
-	        count = count+1
-	    model_out_head.append(temp_out)
+    try:
+        valid_output = open('results/'+args.model+'/'+args.eval_mode+'.txt')
+        model_output_head = open('results/'+args.model+'/'+args.eval_mode+'_head_pred_{}.txt'.format(k))
+        model_output_tail = open('results/'+args.model+'/'+args.eval_mode+'_tail_pred_{}.txt'.format(k))
+    except FileNotFoundError:
+        # Ran through all files, exiting.
+        break
 
-	for line in model_output_tail:
-	    count = 0
-	    temp_out = []
-	    for ele in line.split():
-	        tup  = (float(ele),count)
-	        temp_out.append(tup)
-	        count = count+1
-	    model_out_tail.append(temp_out)
-	
-	for row in model_out_head:
-	    row.sort(key=lambda x:x[0])
+    # Read the head scores
+    model_out_head = []
+    for line in model_output_head:
+        scores = list(map(float, line.split()))
+        scores = list(zip(scores, range(0, len(scores)))) # Add index
+        scores = np.array(scores) # Convert to np_array
+        model_out_head.append(scores[scores[:,0].argsort()]) # Sort according to score
+ 
+    # Read the tail scores
+    model_out_tail = []
+    for line in model_output_tail:
+        scores = list(map(float, line.split()))
+        scores = list(zip(scores, range(0, len(scores)))) # Add index
+        scores = np.array(scores) # Convert to np_array
+        model_out_tail.append(scores[scores[:,0].argsort()]) # Sort according to score
+ 
+    ranks_head = []
+    ranks_tail = []
 
-	for row in model_out_tail:
-	    row.sort(key=lambda x:x[0])
-	
-	final_out_head , final_out_tail= [], []
-	for row in model_out_head:
-	    temp_dict =dict()
-	    count = 0
-	    for ele in row:
-	        temp_dict[ele[1]] = count
-	        count += 1
-	    final_out_head.append(temp_dict)
+    # Find the rank of the original triple
+    for i, row in enumerate(valid_output):
+        row = list(map(float, row.split())) # Kinda hacky, but works.
+        # Double [0] is to find the actual index
+        ranks_head.append(np.where(model_out_head[i][:,1] == row[0])[0][0])
+        ranks_tail.append(np.where(model_out_tail[i][:,1] == row[2])[0][0])
 
-	for row in model_out_tail:
-	    temp_dict =dict()
-	    count = 0
-	    for ele in row:
-	        temp_dict[ele[1]] = count
-	        count += 1
-	    final_out_tail.append(temp_dict)
-	
-	ranks_head = []
-	ranks_tail = []
 
-	for i,row in enumerate(valid_output):
-		ranks_head.append(final_out_head[i][int(row.split()[0])])
-		ranks_tail.append(final_out_tail[i][int(row.split()[2])])
+    # Convert to numpy array
+    ranks_tail = np.array(ranks_tail) + 1
+    ranks_head = np.array(ranks_head) + 1
 
-	print('Epoch {} : {}_tail rank {}\t {}_head rank {}'.format(k, args.eval_mode, np.mean(np.array(ranks_tail))+1, args.eval_mode, np.mean(np.array(ranks_head))+1))
+    # Calculate & print mr
+    mr_tail = np.mean(ranks_tail)
+    mr_head = np.mean(ranks_head)
+    print(f'Epoch {k} : {args.eval_mode}_MR {(mr_tail + mr_head) / 2}')
 
-	tail_array = np.array(ranks_tail)
-	head_array = np.array(ranks_head)
+    # Calculate & print mrr
+    mrr_tail = np.mean(np.reciprocal(ranks_tail))
+    mrr_head = np.mean(np.reciprocal(ranks_head))
+    print(f'Epoch {k} : {args.eval_mode}_MRR {(mrr_tail + mrr_head / 2)}')
 
-	hit_at_10_tail = tail_array[np.where(tail_array < 10)]
-	hit_at_10_head = head_array[np.where(head_array < 10)]
+    # Calculate & print hits@x
+    for hit in [1,3,10]:
+        hits_x_tail = len(ranks_tail[np.where(ranks_tail <= hit)]) / float(len(ranks_tail))
+        hits_x_head = len(ranks_head[np.where(ranks_head <= hit)]) / float(len(ranks_head))
 
-	print('Epoch {} : {}_tail HIT@10 {}\t {}_head HIT@!) {}'.format(k, args.eval_mode, len(hit_at_10_tail)/float(len(tail_array))*100, args.eval_mode, len(hit_at_10_head)/float(len(head_array))*100))
-	
-	if args.eval_mode == 'valid':
-		if (np.mean(np.array(ranks_tail))+1 + np.mean(np.array(ranks_head))+1)/2 < best_rank:
-			best_rank = (np.mean(np.array(ranks_tail))+1 + np.mean(np.array(ranks_head))+1)/2
-			best_epoch = k
-			best_tail_rank = np.mean(np.array(ranks_tail))+1
-			best_head_rank = np.mean(np.array(ranks_head))+1
-		print('------------------------------------------')
-		print('Best Validation Epoch till now Epoch {}, tail rank: {}, head rank: {}'. format(best_epoch, best_tail_rank, best_head_rank))
-		print('------------------------------------------')
+        print(f'Epoch {k} : {args.eval_mode}_HITS@{hit} {(hits_x_tail + hits_x_head) / 2}')
+    
+    if args.eval_mode == 'valid':
+        if (np.mean(np.array(ranks_tail))+1 + np.mean(np.array(ranks_head))+1)/2 < best_rank:
+            best_rank = (np.mean(np.array(ranks_tail))+1 + np.mean(np.array(ranks_head))+1)/2
+            best_epoch = k
+            best_tail_rank = np.mean(np.array(ranks_tail))+1
+            best_head_rank = np.mean(np.array(ranks_head))+1
+        print('------------------------------------------')
+        print('Best Validation Epoch till now Epoch {}, tail rank: {}, head rank: {}'. format(best_epoch, best_tail_rank, best_head_rank))
+        print('------------------------------------------')

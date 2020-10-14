@@ -1,0 +1,93 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Current File",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "temp_eval",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}\\result_eval_time.py",
+            "console": "integratedTerminal",
+            "args": [
+                "-model",
+                "yago_both_temporal",
+                "-test_freq",
+                "500"
+            ]
+        },
+        {
+            "name": "time_proj_tdns_scope",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}\\time_proj_tdns_scope.py",
+            "console": "integratedTerminal",
+            "args": [
+                "-name",
+                "yago_src_temporal",
+                "-margin",
+                "10",
+                "-l2",
+                "0.00",
+                "-neg_sample",
+                "5",
+                "-epoch",
+                "501",
+                "-data_type",
+                "yago",
+                "-version",
+                "src",
+                "-test_freq",
+                "500"
+            ]
+        },
+        {
+            "name": "result_eval",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}\\result_eval.py",
+            "console": "integratedTerminal",
+            "args": [
+                "-eval_mode",
+                "test",
+                "-test_freq",
+                "500",
+                "-model",
+                "icews_intra"
+            ],
+        },
+        {
+            "name": "time_proj icews_large",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}\\time_proj.py",
+            "console": "integratedTerminal",
+            "args": [
+                "-name",
+                "icews_large",
+                "-margin",
+                "10",
+                "-l2",
+                "0.00",
+                "-neg_sample",
+                "5",
+                "-epoch",
+                "501",
+                "-data_type",
+                "icews14",
+                "-version",
+                "large",
+                "-test_freq",
+                "500"
+            ]
+        }
+    ]
+}

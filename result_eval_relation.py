@@ -3,9 +3,6 @@ import argparse,pdb
 parser = argparse.ArgumentParser(description='Eval model outputs')
 parser.add_argument('-model', 	 	dest = "model", required=True,				help='Dataset to use')
 parser.add_argument('-test_freq', 	dest = "freq", 	required=True,	type =int,  help='what is to be predicted')
-
-#parser.add_argument('-entity2id'  , dest="entity2id", 		required=True,			help='Entity 2 id')
-#parser.add_argument('-relation2id', dest="relation2id", 	required=True,			help=' relation to id')
 args = parser.parse_args()
 
 	

@@ -1,0 +1,6 @@
+
+results/
+data/
+checkpoints/
+.vscode/settings.json
+__pycache__/

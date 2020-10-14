@@ -425,23 +425,13 @@ class HyTE(Model):
 		neg_h_e = tf.squeeze(tf.nn.embedding_lookup(transE_in, self.neg_head))
 		neg_t_e = tf.squeeze(tf.nn.embedding_lookup(transE_in, self.neg_tail))
 
-		#### ----- time -----###
-		t_1 = tf.squeeze(tf.nn.embedding_lookup(self.time_embeddings, self.start_year))
-		
-		pos_h_e_t_1 = self.time_projection(pos_h_e,t_1)
-		neg_h_e_t_1 = self.time_projection(neg_h_e,t_1)
-		pos_t_e_t_1 = self.time_projection(pos_t_e,t_1)
-		neg_t_e_t_1 = self.time_projection(neg_t_e,t_1)
-		pos_r_e_t_1 = self.time_projection(pos_r_e,t_1)
-		# pos_r_e_t_1 = pos_r_e
-
 		if self.p.L1_flag:
-			pos = tf.reduce_sum(abs(pos_h_e_t_1 + pos_r_e_t_1 - pos_t_e_t_1), 1, keep_dims = True) 
-			neg = tf.reduce_sum(abs(neg_h_e_t_1 + pos_r_e_t_1 - neg_t_e_t_1), 1, keep_dims = True) 
+			pos = tf.reduce_sum(abs(pos_h_e + pos_r_e - pos_t_e), 1, keep_dims = True) 
+			neg = tf.reduce_sum(abs(neg_h_e + pos_r_e - neg_t_e), 1, keep_dims = True) 
 			#self.predict = pos
 		else:
-			pos = tf.reduce_sum((pos_h_e_t_1 + pos_r_e_t_1 - pos_t_e_t_1) ** 2, 1, keep_dims = True) 
-			neg = tf.reduce_sum((neg_h_e_t_1 + pos_r_e_t_1 - neg_t_e_t_1) ** 2, 1, keep_dims = True) 
+			pos = tf.reduce_sum((pos_h_e + pos_r_e - pos_t_e) ** 2, 1, keep_dims = True) 
+			neg = tf.reduce_sum((neg_h_e + pos_r_e - neg_t_e) ** 2, 1, keep_dims = True) 
 			#self.predict = pos
 
 		'''
@@ -478,17 +468,13 @@ class HyTE(Model):
 		print('model done')
 
 	def run_epoch(self, sess,data,epoch):
-		drop_rate = self.p.dropout
-
 		losses = []
-		# total_correct, total_cnt = 0, 0
 
 		for step, batch in enumerate(self.getBatches(data, shuffle)):
 			feed = self.create_feed_dict(batch)
 			l, a = sess.run([self.loss, self.train_op],feed_dict = feed)
 			losses.append(l)
 		return np.mean(losses)
-
 
 	def fit(self, sess):
 		saver = tf.train.Saver(max_to_keep=None)
@@ -557,8 +543,8 @@ if __name__== "__main__":
 	print('here in main')
 	parser = argparse.ArgumentParser(description='HyTE')
 
-	parser.add_argument('-data_type', dest= "data_type", default ='yago', choices = ['yago','wiki_data'], help ='dataset to choose')
-	parser.add_argument('-version',dest = 'version', default = 'large', choices = ['large','small'], help = 'data version to choose')
+	parser.add_argument('-data_type', dest= "data_type", default ='yago', choices = ['yago','wikidata', 'icews'], help ='dataset to choose')
+	parser.add_argument('-version',dest = 'version', default = 'large', choices = ['inter', 'intra','both','none','src'], help = 'data version to choose')
 	parser.add_argument('-test_freq', 	 dest="test_freq", 	default = 25,   	type=int, 	help='Batch size')
 	parser.add_argument('-neg_sample', 	 dest="M", 		default = 5,   	type=int, 	help='Batch size')
 	parser.add_argument('-gpu', 	 dest="gpu", 		default='1',			help='GPU to use')
@@ -567,7 +553,7 @@ if __name__== "__main__":
 	parser.add_argument('-rdrop',	 dest="rec_dropout", 	default=1.0,  	type=float,	help='Recurrent dropout for LSTM')
 	parser.add_argument('-lr',	 dest="lr", 		default=0.0001,  type=float,	help='Learning rate')
 	parser.add_argument('-lam_1',	 dest="lambda_1", 		default=0.5,  type=float,	help='transE weight')
-	parser.add_argument('-lam_2',	 dest="lambda_2", 		default=0.25,  type=float,	help='entitty loss weight')
+	parser.add_argument('-lam_2',	 dest="lambda_2", 		default=0.25,  type=float,	help='entity loss weight')
 	parser.add_argument('-margin', 	 dest="margin", 	default=1,   	type=float, 	help='margin')
 	parser.add_argument('-batch', 	 dest="batch_size", 	default= 50000,   	type=int, 	help='Batch size')
 	parser.add_argument('-epoch', 	 dest="max_epochs", 	default= 5000,   	type=int, 	help='Max epochs')
@@ -576,16 +562,17 @@ if __name__== "__main__":
 	parser.add_argument('-inp_dim',  dest="inp_dim", 	default = 128,   	type=int, 	help='Hidden state dimension of Bi-LSTM')
 	parser.add_argument('-L1_flag',  dest="L1_flag", 	action='store_false',   	 	help='Hidden state dimension of FC layer')
 	parser.add_argument('-onlytransE', dest="onlytransE", 	action='store_true', 		help='Evaluate model on only transE loss')
+
 	parser.add_argument('-onlyTest', dest="onlyTest", 	action='store_true', 		help='Evaluate model for test data')
 	parser.add_argument('-restore',	 dest="restore", 	action='store_true', 		help='Restore from the previous best saved model')
 	parser.add_argument('-res_epoch',	     dest="restore_epoch", 	default=200,   type =int,		help='Restore from the previous best saved model')
 	args = parser.parse_args()
-	args.dataset = 'data/'+ args.data_type +'/'+ args.version+'/train.txt'
-	args.entity2id = 'data/'+ args.data_type +'/'+ args.version+'/entity2id.txt'
-	args.relation2id = 'data/'+ args.data_type +'/'+ args.version+'/relation2id.txt'
-	args.valid_data  =  'data/'+ args.data_type +'/'+ args.version+'/valid.txt'
-	args.test_data  =  'data/'+ args.data_type +'/'+ args.version+'/test.txt'
-	args.triple2id  =   'data/'+ args.data_type +'/'+ args.version+'/triple2id.txt'
+	args.dataset = 'data/'+ args.data_type +'_'+ args.version+'/train.txt'
+	args.entity2id = 'data/'+ args.data_type +'_'+ args.version+'/entity2id.txt'
+	args.relation2id = 'data/'+ args.data_type +'_'+ args.version+'/relation2id.txt'
+	args.valid_data  =  'data/'+ args.data_type +'_'+ args.version+'/valid.txt'
+	args.test_data  =  'data/'+ args.data_type +'_'+ args.version+'/test.txt'
+	args.triple2id  =   'data/'+ args.data_type +'_'+ args.version+'/triple2id.txt'
 	# if not args.restore: args.name = args.name + '_' + time.strftime("%d_%m_%Y") + '_' + time.strftime("%H:%M:%S")
 	tf.set_random_seed(args.seed)
 	random.seed(args.seed)
