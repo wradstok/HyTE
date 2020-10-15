@@ -19,9 +19,13 @@
             "console": "integratedTerminal",
             "args": [
                 "-model",
-                "yago_both_temporal",
+                "yago_src_temporal",
                 "-test_freq",
-                "500"
+                "500",
+                "-mode",
+                "test",
+                "-eval_metric",
+                "3"
             ]
         },
         {
