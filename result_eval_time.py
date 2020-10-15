@@ -1,8 +1,10 @@
 import numpy as np
-import argparse,pdb
+import argparse
+
 parser = argparse.ArgumentParser(description='Eval model outputs')
-parser.add_argument('-model', 	 	dest = "model", required=True,				help='Dataset to use')
-parser.add_argument('-test_freq', 	dest = "freq", 	required=True,	type =int,  help='what is to be predicted')
+parser.add_argument('-model', dest = "model", required=True, help='Dataset to use')
+parser.add_argument('-mode', dest="mode", required=True, choices=["valid","test"], help="Run for validation or test set")
+parser.add_argument('-test_freq', dest = "freq", required=True,	type =int, help='what is to be predicted')
 
 args = parser.parse_args()
 
@@ -11,8 +13,8 @@ print(args.model)
 
 for k in range(args.freq,30000,args.freq):
 	try:
-		valid_output = open('results/temp_scope/'+args.model+'/valid.txt')
-		model_time = open('results/temp_scope/'+args.model+'/valid_time_pred_{}.txt'.format(k))
+		valid_output = open(f'temp_scope/{args.model}/{args.mode}.txt')
+		model_time = open(f'temp_scope/{args.model}/{args.mode}_time_pred_{k}.txt')
 	except FileNotFoundError:
 		# Ran through all files, exiting.	
 		break

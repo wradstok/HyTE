@@ -46,7 +46,11 @@
                 "-version",
                 "src",
                 "-test_freq",
-                "500"
+                "500",
+                "-res_epoch",
+                "500",
+                "-onlyTest",
+                "-restore",
             ]
         },
         {

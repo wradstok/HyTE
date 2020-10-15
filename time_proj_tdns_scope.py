@@ -1,36 +1,19 @@
-import argparse
-import os
-import pdb
-import random
-import uuid
-from collections import defaultdict as ddict, Counter
+from models import *
 from random import *
+from collections import defaultdict as ddict
 
 import pandas as pd
-import scipy.sparse as sp
+import numpy as np
+import uuid, os, argparse
+import random
 import tensorflow as tf
+import helper as Helper
+import prediction as Pred
 
-from helper import *
-from models import *
 
 YEARMIN = -50
 YEARMAX = 3000
 class HyTE(Model):
-
-	def parse_quintuple(self, line: str):
-		""" Read a (head, relation, tail, begin_time, end_time) quintuple from the dataset. 
-			Time information is given at year level."""
-		h, r, t, b, e = map(str.strip, line.split())
-		b, e = b.split('-')[0], e.split("-")[0]
-		return (h, r, t, b, e)
-
-	def read_data(self,filename):
-		valid_triples = []
-		with open(filename,'r') as filein:
-			for line in filein:
-				valid_triples.append(list(self.parse_quintuple(line)))
-
-		return valid_triples
 
 	def getBatches(self, data, shuffle = True):
 		if shuffle: 
@@ -42,160 +25,34 @@ class HyTE(Model):
 			start_idx = i * self.p.batch_size
 			yield data[start_idx : start_idx + self.p.batch_size]
 
-
-	def create_year2id(self,triple_time):
-		year2id = dict()
-		freq = ddict(int)
-		count = 0
-		year_list = []
-		
-		# Create a list of all years
-		for triple_scope in triple_time.values():
-			for year in triple_scope:
-				# NOTE: This implementation ignores years consist of fewer than 4 digits. 
-				if year.find("#") == -1 and len(year) == 4:
-					year_list.append(int(year))
-
-		# Count the number of occurrences for each year.
-		freq = Counter(year_list)
-
-		# Create classes.
-		# NOTE: This implementation ignores the valid time of facts when generating classes.
-		#		E.g., a fact with scope [1250,2000] is only counted as an occurence for 1250 and 2000.
-		year_class = [] # Stores the final year of each class
-		count = 0
-		for key in sorted(freq.keys()):
-			count += freq[key]
-			if count > 300:
-				year_class.append(key)
-				count = 0
-
-		# Create a dict of (begin, end) keys that have an ID as value.
-		prev_year, i = 0, 0
-		for i, end_year in enumerate(year_class):
-			year2id[(prev_year, end_year)] = i
-			prev_year = end_year + 1
-
-		year2id[(prev_year, max(year_list))] = i + 1
-		self.year_list = sorted(year_list)
-		return year2id
-	
-	def get_span_ids(self, start, end):
-		start =int(start)
-		end=int(end)
-		if start > end:
-			end = YEARMAX
-
-		if start == YEARMIN:
-			start_lbl = 0
-		else:
-			for key,lbl in sorted(self.year2id.items(), key=lambda x:x[1]):
-				if start >= key[0] and start <= key[1]:
-					start_lbl = lbl
-		
-		if end == YEARMAX:
-			end_lbl = len(self.year2id.keys())-1
-		else:
-			for key,lbl in sorted(self.year2id.items(), key=lambda x:x[1]):
-				if end >= key[0] and end <= key[1]:
-					end_lbl = lbl
-		return start_lbl, end_lbl
-
-	def create_id_labels(self,triple_time):
-		YEARMAX = 3000
-		YEARMIN =  -50
-		
-		# Input_idx stores the ID's of triples that passed validation of temporal information.
-		# Start_idx stores temporal class indices?
-		# End_idx stores temporal class indices?
-		inp_idx, start_idx, end_idx = [], [], []
-		
-		for triple_idx, triple_scope in triple_time.items():
-			# Again, parse the triple scopes like in year2id.
-			# Ignores years that are not 4 digits long.
-			start = triple_scope[0].split('-')[0]
-			end = triple_scope[1].split('-')[0]
-			if start == '####':
-				start = YEARMIN
-			elif start.find('#') != -1 or len(start) != 4:
-				continue
-
-			if end == '####':
-				end = YEARMAX
-			elif end.find('#') != -1 or len(end)!=4:
-				continue
-			
-			start = int(start)
-			end   = int(end)
-			
-			if start > end:
-				end = YEARMAX
-
-			inp_idx.append(triple_idx)
-
-			# Find the index of the class in which this triple starts.
-			if start == YEARMIN:
-				start_idx.append(0)
-			else:
-				for key, lbl in self.year2id.items():
-					if start >= key[0] and start <= key[1]:
-						start_idx.append(lbl)
-						break
-			
-			# Find the index of the class in which this triple ends.
-			if end == YEARMAX:
-				end_idx.append(len(self.year2id.keys())-1)
-			else:
-				for key,lbl in self.year2id.items():
-					if end >= key[0] and end <= key[1]:
-						end_idx.append(lbl)
-						break
-
-		return inp_idx, start_idx, end_idx
-
 	def load_data(self):
 		triple_set = set()
 		with open(self.p.triple2id,'r') as filein:
 			for line in filein:
-				h, r, t, _, _ = self.parse_quintuple(line)
+				h, r, t, _, _ = Helper.parse_quintuple(line)
 				triple_set.add((h,r,t))
 
-		train_triples = []
 		self.start_time , self.end_time, self.num_class  = ddict(dict), ddict(dict), ddict(dict)
 		triple_time = dict()
 		self.inp_idx, self.start_idx, self.end_idx ,self.labels = ddict(list), ddict(list), ddict(list), ddict(list)
 
 		# Load training data.
+		train_triples = []
 		with open(self.p.dataset,'r') as train_data:
 			for i, line in enumerate(train_data):
-				h, r, t, b, e = self.parse_quintuple(line)
-				train_triples.append([h,r,t])
-				triple_time[i] = [b, e]
+				h, r, t, b, e = Helper.parse_quintuple(line)
+				if e != -1:
+					train_triples.append([h,r,t])
+					triple_time[i] = [b, e]
 
-		# Count # entities
-		self.max_ent = 0
-		with open(self.p.entity2id,'r', encoding="utf8") as entity_data:
-			for line in entity_data:
-				self.max_ent += 1
-
-		# Count # relations
-		self.max_rel = 0
-		with open(self.p.relation2id, 'r') as filein3:
-			for line in filein3:
-				self.max_rel += 1
+		self.max_ent = Helper.get_line_count(self.p.entity2id)
+		self.max_rel = Helper.get_line_count(self.p.relation2id)
 
 		# Create year classes, e.g. (0-1853)
-		self.year2id = self.create_year2id(triple_time)
+		self.year_list, self.year2id = Helper.create_year2id(triple_time)
 		self.num_class = len(self.year2id.keys())
 
-		self.inp_idx['triple'], self.start_idx, self.end_idx = self.create_id_labels(triple_time)
-
-		# Delete all triples from train whose scope could not be parsed in create_id_labels
-		# As these do not have an entry in inp_idx['triple']
-		keep_idx = set(self.inp_idx['triple'])
-		for i in range (len(train_triples)-1,-1,-1):
-			if i not in keep_idx:
-				del train_triples[i]
+		self.inp_idx, self.start_idx, self.end_idx = Helper.create_id_labels(triple_time, self.year2id)
 
 		# Turn train triples into individual head, relation, tail list (two times)		
 		posh, rela, post =  map(list, zip(*train_triples))
@@ -219,7 +76,7 @@ class HyTE(Model):
 			tup = (int(tail[z]), int(rel[z]), int(self.start_idx[z]))
 			keep_head[tup].add(head[z])
 
-		# I give up.
+		# Time dependent negative sampling .. somehow
 		max_time_class = len(self.year2id.keys())
 		self.ph, self.pt, self.r,self.nh, self.nt , self.triple_time  = [], [], [], [], [], []
 		for triple_id in range(len(head)):
@@ -230,6 +87,7 @@ class HyTE(Model):
 			random.shuffle(sample_time)
 			possible_head = randint(0, self.max_ent - 1) # Generate a random entity?
 
+			# Loop over all time periods.
 			for z, time in enumerate(sample_time):
 				if time == self.start_idx[triple_id]: 
 					continue
@@ -243,6 +101,7 @@ class HyTE(Model):
 
 			head_corrupt = list(set(head_corrupt))
 			random.shuffle(head_corrupt)
+			# Generate corruptions?
 			for k in range(self.p.M):
 				if k < len(head_corrupt):
 					self.nh.append(head_corrupt[k])
@@ -253,7 +112,6 @@ class HyTE(Model):
 					self.triple_time.append(self.start_idx[triple_id])
 					neg_set.add((head_corrupt[k], rel[triple_id],tail[triple_id]))
 				else:
-					# break
 					while (possible_head, rel[triple_id], tail[triple_id]) in triple_set or (possible_head, rel[triple_id],tail[triple_id]) in neg_set:
 						possible_head = randint(0,self.max_ent-1)
 					self.nh.append(possible_head)
@@ -274,8 +132,10 @@ class HyTE(Model):
 			
 			possible_tail = randint(0,self.max_ent-1)
 			for z, time in enumerate(sample_time):
-				if time == self.start_idx[triple]: continue
-				if (head[triple], rel[triple], time) not in keep_tail: continue
+				if time == self.start_idx[triple]: 
+					continue
+				if (head[triple], rel[triple], time) not in keep_tail: 
+					continue
 				for s, value in enumerate(keep_tail[(head[triple], rel[triple], time)]):
 					if value != tail[triple] and (head[triple], rel[triple], value) not in neg_set:
 						if (head[triple], rel[triple], self.start_idx[triple]) in keep_head  and value in keep_head[(head[triple], rel[triple], self.start_idx[triple])]:
@@ -307,9 +167,6 @@ class HyTE(Model):
 		self.time_steps = sorted(self.year2id.values())
 		self.data = list(zip(self.ph, self.pt, self.r , self.nh, self.nt, self.triple_time))
 		self.data = self.data + self.data[0:self.p.batch_size]
-		for i in range(len(self.ph)):
-			if self.ph[i] == self.nh[i] and self.pt[i] == self.nt[i]:
-				print("False")
 
 	def add_placeholders(self):
 		self.start_year = tf.placeholder(tf.int32 ,shape=[None], name = 'start_time')
@@ -320,8 +177,6 @@ class HyTE(Model):
 		self.neg_head 	= tf.placeholder(tf.int32, [None,1])
 		self.neg_tail 	= tf.placeholder(tf.int32, [None,1])
 		self.mode 	  	= tf.placeholder(tf.int32,shape = ())
-		self.dropout 		= tf.placeholder_with_default(self.p.dropout, 	  shape=(), name='dropout')
-		self.rec_dropout 	= tf.placeholder_with_default(self.p.rec_dropout, shape=(), name='rec_dropout')
 
 	def create_feed_dict(self, batch, wLabels=True,dtype='train'):
 		ph, pt, r, nh, nt, start_idx = zip(*batch)
@@ -336,8 +191,6 @@ class HyTE(Model):
 			feed_dict[self.mode]   	 = 1
 		else: 
 			feed_dict[self.mode] = -1
-			feed_dict[self.dropout]     = 1.0
-			feed_dict[self.rec_dropout] = 1.0
 
 		return feed_dict
 
@@ -348,6 +201,7 @@ class HyTE(Model):
 		data = data - prod
 		return data
 
+
 	def add_model(self):
 		with tf.name_scope("embedding"):
 			self.ent_embeddings =  tf.get_variable(name = "ent_embedding",  shape = [self.max_ent, self.p.inp_dim], initializer = tf.contrib.layers.xavier_initializer(uniform = False), regularizer=self.regularizer)
@@ -357,8 +211,6 @@ class HyTE(Model):
 			transE_in_dim = self.p.inp_dim
 			transE_in     = self.ent_embeddings
 		####################------------------------ time aware GCN MODEL ---------------------------##############
-
-
 	
 		## Some transE style model ####
 		neutral = tf.constant(0)
@@ -401,14 +253,16 @@ class HyTE(Model):
 
 	def add_loss(self, pos, neg):
 		with tf.name_scope('Loss_op'):
-			loss     = tf.reduce_sum(tf.maximum(pos - neg + self.p.margin, 0))
-			if self.regularizer != None: loss += tf.contrib.layers.apply_regularization(self.regularizer, tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
+			loss = tf.reduce_sum(tf.maximum(pos - neg + self.p.margin, 0))
+			if self.regularizer != None: 
+				loss += tf.contrib.layers.apply_regularization(self.regularizer, tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
 			return loss
 
 	def add_optimizer(self, loss):
 		with tf.name_scope('Optimizer'):
 			optimizer = tf.train.AdamOptimizer(self.p.lr)
 			train_op  = optimizer.minimize(loss)
+		# Is this a no-op, or does assign modify state somehow?
 		time_normalizer = tf.assign(self.time_embeddings, tf.nn.l2_normalize(self.time_embeddings,dim = 1))
 		return train_op
 
@@ -441,82 +295,37 @@ class HyTE(Model):
 
 	def fit(self, sess):
 		saver = tf.train.Saver(max_to_keep=None)
-		save_dir = 'checkpoints/' + self.p.name + '/'
-		if not os.path.exists(save_dir):
-			 os.makedirs(save_dir)
-		save_dir_results = './results/'+ self.p.name + '/'
-		if not os.path.exists(save_dir_results):
-			 os.makedirs(save_dir_results)
+		save_dir = Helper.get_checkpoint_dir(self.p.name)
+		
 		if self.p.restore:
-			save_path = os.path.join(save_dir, 'epoch_{}'.format(self.p.restore_epoch))
+			save_path = os.path.join(save_dir, f'epoch_{self.p.restore_epoch}')
 			saver.restore(sess, save_path)
-		print('start fitting')
-		self.best_prf = None
-		validation_data = self.read_data(self.p.valid_data)
 
 		if not self.p.onlyTest:
+			print('Start fitting')
+			validation_data = Helper.read_data(self.p.valid_data)
+			
 			for epoch in range(self.p.max_epochs):
-				l = self.run_epoch(sess,self.data,epoch)
-				
-				if epoch%50 == 0:
-					print(f'Epoch {epoch}\t Loss {l}\t model {self.p.name}')
+				loss = self.run_epoch(sess,self.data,epoch)
+
+				if epoch % 50 == 0:
+					print(f'Epoch {epoch}\t Loss {loss}\t model {self.p.name}')
 
 				if epoch % self.p.test_freq == 0 and epoch != 0:
 					## -- check pointing -- ##
-					save_path = os.path.join(save_dir, 'epoch_{}'.format(epoch))   
+					save_path = os.path.join(save_dir, f'epoch_{epoch}')   
 					saver.save(sess=sess, save_path=save_path)
-					save_dir_results = 'temp_scope/'+ self.p.name + '/'
-					if not os.path.exists(save_dir_results): os.makedirs(save_dir_results) 
-					
-					if epoch == self.p.test_freq:
-						f_valid = open(save_dir_results+'/valid.txt','w')
-					f_time = open(save_dir_results+'/valid_time_pred_{}.txt'.format(epoch),'w')
-					
-					for i,t in enumerate(validation_data):
-						loss =np.zeros(self.max_ent)
-						start_trip 	= t[3][0].split('-')[0]
-						end_trip 	= t[3][1].split('-')[0]
-						if start_trip == '####':
-							start_trip = YEARMIN
-						elif start_trip.find('#') != -1 or len(start_trip)!=4:
-							continue
 
-						if end_trip == '####':
-							end_trip = YEARMAX
-						elif end_trip.find('#')!= -1 or len(end_trip)!=4:
-							continue
-							
-						start_lbl, end_lbl = self.get_span_ids(start_trip, end_trip)
-						if epoch == self.p.test_freq:
-							f_valid.write(str(start_lbl)+'\t'+str(end_lbl)+'\n')
-						pos_time = sess.run(self.pos ,feed_dict = { self.pos_head:  	np.array([t[0]]).reshape(-1,1), 
-																   	self.rel:       	np.array([t[1]]).reshape(-1,1), 
-																   	self.pos_tail:	    np.array([t[2]]).reshape(-1,1),
-																   	self.start_year:    np.array(self.time_steps),
-																   	self.end_year:      np.array([end_lbl]*self.max_ent),
-																   	self.mode: 			-1,
-																   }
-										    )
-		
-
-						pos_time = np.squeeze(pos_time)
-						f_time.write(' '.join([str(x) for x in pos_time]) + '\n')
-						
-						if i%1000 == 0:
-							print('{}. no of valid_triples complete'.format(i))
-						
-					
-					if epoch == self.p.test_freq:
-						f_valid.close()
-					f_time.close()
-					print("Validation Ended")
+					print("Validation started")
+					Pred.temp_test_against(self, sess, validation_data, "valid", epoch)
+					print("Validation ended")
 		else: 
-			time_mat = sess.run(self.time_embeddings)
-			df = pd.DataFrame(data=time_mat.astype(float)) 
-			df.to_csv(self.p.name + str(self.p.restore_epoch) + '.tsv', sep='\t', header=False, float_format='%.6f', index=False)
+			print("Testing started")
+			test_data = Helper.read_data(self.p.test_data)
+			Pred.temp_test_against(self, sess, test_data, "test", self.p.restore_epoch)
+			print("Testing ended")
 
 if __name__== "__main__":
-	print('here in main')
 	parser = argparse.ArgumentParser(description='KG temporal inference using GCN')
 
 	parser.add_argument('-data_type', dest= "data_type", default ='yago', choices = ['yago','wiki_data'], help ='dataset to choose')
@@ -526,16 +335,14 @@ if __name__== "__main__":
 	parser.add_argument('-gpu', 	 dest="gpu", 		default='1',			help='GPU to use')
 	parser.add_argument('-name', 	 dest="name", 		default='test_'+str(uuid.uuid4()),help='Name of the run')
 	parser.add_argument('-embed', 	 dest="embed_init", 	default='wiki_300',	 	help='Embedding for initialization')
-	parser.add_argument('-drop',	 dest="dropout", 	default=1.0,  	type=float,	help='Dropout for full connected layer')
-	parser.add_argument('-rdrop',	 dest="rec_dropout", 	default=1.0,  	type=float,	help='Recurrent dropout for LSTM')
 	parser.add_argument('-lr',	 dest="lr", 		default=0.0001,  type=float,	help='Learning rate')
 	parser.add_argument('-margin', 	 dest="margin", 	default= 10 ,   	type=float, 	help='margin')
 	parser.add_argument('-batch', 	 dest="batch_size", 	default= 50000,   	type=int, 	help='Batch size')
 	parser.add_argument('-epoch', 	 dest="max_epochs", 	default= 5000,   	type=int, 	help='Max epochs')
 	parser.add_argument('-l2', 	 dest="l2", 		default=0.0, 	type=float, 	help='L2 regularization')
 	parser.add_argument('-seed', 	 dest="seed", 		default=1234, 	type=int, 	help='Seed for randomization')
-	parser.add_argument('-inp_dim',  dest="inp_dim", 	default = 128,   	type=int, 	help='Hidden state dimension of Bi-LSTM')
-	parser.add_argument('-L1_flag',  dest="L1_flag", 	action='store_false',   	 	help='Hidden state dimension of FC layer')
+	parser.add_argument('-inp_dim',  dest="inp_dim", 	default = 128,   	type=int, 	help='Number of hidden dimensions')
+	parser.add_argument('-L1_flag',  dest="L1_flag", 	action='store_false',   	 	help='Apply L1 distance norm instead of L2')
 	parser.add_argument('-onlyTest', dest="onlyTest", 	action='store_true', 		help='Evaluate model on test')
 	parser.add_argument('-onlytransE', dest="onlytransE", 	action='store_true', 		help='Evaluate model on only transE loss')
 	parser.add_argument('-restore',	 		 dest="restore", 	    action='store_true', 		help='Restore from the previous best saved model')
@@ -550,14 +357,12 @@ if __name__== "__main__":
 	args.triple2id  =   'data/'+ args.data_type +'_'+ args.version+'/triple2id.txt'
 	args.embed_dim = int(args.embed_init.split('_')[1])
 
-	# if not args.restore: 
-	# 	args.name = args.name + '_' + time.strftime("%d_%m_%Y") + '_' + time.strftime("%H:%M:%S")
 	tf.set_random_seed(args.seed)
 	random.seed(args.seed)
 	np.random.seed(args.seed)
-	set_gpu(args.gpu)
+	Helper.set_gpu(args.gpu)
 	model  = HyTE(args)
-	print('model object created')
+
 	config = tf.ConfigProto()
 	config.gpu_options.allow_growth=True
 	with tf.Session(config=config) as sess:

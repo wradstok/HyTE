@@ -1,40 +1,19 @@
 from models import *
-from helper import *
 from random import *
-from pprint import pprint
-import pandas as pd
-import scipy.sparse as sp
-import uuid, sys, os, time, argparse
-import pickle, pdb, operator, random, sys
-import tensorflow as tf
 from collections import defaultdict as ddict
-from sklearn.metrics import precision_recall_fscore_support
+
+import uuid, os, argparse
+import random
+import tensorflow as tf
+import numpy as np
+
+import helper as Helper
+import prediction as Pred
 
 
 YEARMIN = -50
 YEARMAX = 3000
 class HyTE(Model):
-	def read_valid(self,filename):
-		valid_triples = []
-		with open(filename,'r') as filein:
-			temp = []
-			for line in filein:
-				temp = [int(x.strip()) for x in line.split()[0:3]]
-				temp.append([line.split()[3],line.split()[4]])
-				valid_triples.append(temp)
-		return valid_triples
-
-	def getOneHot(self, start_data, end_data, num_class):
-		temp = np.zeros((len(start_data), num_class), np.float32)
-		for i, ele in enumerate(start_data):
-			if end_data[i] >= start_data[i]:
-				temp[i,start_data[i]:end_data[i]+1] = 1/(end_data[i]+1-start_data[i]) 
-			else:
-				pdb.set_trace()
-		return temp	
-
-
-
 	def getBatches(self, data, shuffle = True):
 		if shuffle: random.shuffle(data)
 		num_batches = len(data) // self.p.batch_size
@@ -42,131 +21,6 @@ class HyTE(Model):
 		for i in range(num_batches):
 			start_idx = i * self.p.batch_size
 			yield data[start_idx : start_idx + self.p.batch_size]
-
-
-	def create_year2id(self,triple_time):
-		year2id = dict()
-		freq = ddict(int)
-		count = 0
-		year_list = []
-
-		for k,v in triple_time.items():
-			try:
-				start = v[0].split('-')[0]
-				end = v[1].split('-')[0]
-			except:
-				pdb.set_trace()
-
-			if start.find('#') == -1 and len(start) == 4: year_list.append(int(start))
-			if end.find('#') == -1 and len(end) ==4: year_list.append(int(end))
-
-		# for k,v in entity_time.items():
-		# 	start = v[0].split('-')[0]
-		# 	end = v[1].split('-')[0]
-			
-		# 	if start.find('#') == -1 and len(start) == 4: year_list.append(int(start))
-		# 	if end.find('#') == -1 and len(end) ==4: year_list.append(int(end))
-		# 	# if int(start) > int(end):
-		# 	# 	pdb.set_trace()
-		
-		year_list.sort()
-		for year in year_list:
-			freq[year] = freq[year] + 1
-
-		year_class =[]
-		count = 0
-		for key in sorted(freq.keys()):
-			count += freq[key]
-			if count > 300:
-				year_class.append(key)
-				count = 0
-		prev_year = 0
-		i=0
-		for i,yr in enumerate(year_class):
-			year2id[(prev_year,yr)] = i
-			prev_year = yr+1
-		year2id[(prev_year, max(year_list))] = i + 1
-		self.year_list =year_list
-
-		# for k,v in entity_time.items():
-		# 	if v[0] == '####-##-##' or v[1] == '####-##-##':
-		# 		continue
-		# 	if len(v[0].split('-')[0])!=4 or len(v[1].split('-')[0])!=4:
-		# 		continue
-		# 	start = v[0].split('-')[0]
-		# 	end = v[1].split('-')[0]
-		# for start in start_list:
-		# 	if start not in start_year2id:
-		# 		start_year2id[start] = count_start
-		# 		count_start+=1
-
-		# for end in end_list:
-		# 	if end not in end_year2id:
-		# 		end_year2id[end] = count_end
-		# 		count_end+=1
-		
-		return year2id
-	def get_span_ids(self, start, end):
-		start =int(start)
-		end=int(end)
-		if start > end:
-			end = YEARMAX
-
-		if start == YEARMIN:
-			start_lbl = 0
-		else:
-			for key,lbl in sorted(self.year2id.items(), key=lambda x:x[1]):
-				if start >= key[0] and start <= key[1]:
-					start_lbl = lbl
-		
-		if end == YEARMAX:
-			end_lbl = len(self.year2id.keys())-1
-		else:
-			for key,lbl in sorted(self.year2id.items(), key=lambda x:x[1]):
-				if end >= key[0] and end <= key[1]:
-					end_lbl = lbl
-		return start_lbl, end_lbl
-
-	def create_id_labels(self,triple_time,dtype):
-		YEARMAX = 3000
-		YEARMIN =  -50
-		
-		inp_idx, start_idx, end_idx =[], [], []
-		
-		for k,v in triple_time.items():
-			start = v[0].split('-')[0]
-			end = v[1].split('-')[0]
-			if start == '####':
-				start = YEARMIN
-			elif start.find('#') != -1 or len(start)!=4:
-				continue
-
-			if end == '####':
-				end = YEARMAX
-			elif end.find('#')!= -1 or len(end)!=4:
-				continue
-			
-			start = int(start)
-			end = int(end)
-			
-			if start > end:
-				end = YEARMAX
-			inp_idx.append(k)
-			if start == YEARMIN:
-				start_idx.append(0)
-			else:
-				for key,lbl in sorted(self.year2id.items(), key=lambda x:x[1]):
-					if start >= key[0] and start <= key[1]:
-						start_idx.append(lbl)
-			
-			if end == YEARMAX:
-				end_idx.append(len(self.year2id.keys())-1)
-			else:
-				for key,lbl in sorted(self.year2id.items(), key=lambda x:x[1]):
-					if end >= key[0] and end <= key[1]:
-						end_idx.append(lbl)
-
-		return inp_idx, start_idx, end_idx
 
 	def load_data(self):
 		triple_set = []
@@ -178,155 +32,74 @@ class HyTE(Model):
 
 		train_triples = []
 		self.start_time , self.end_time, self.num_class  = ddict(dict), ddict(dict), ddict(dict)
-		triple_time, entity_time = dict(), dict()
+		triple_time = dict()
 		self.inp_idx, self.start_idx, self.end_idx ,self.labels = ddict(list), ddict(list), ddict(list), ddict(list)
-		max_ent, max_rel, count = 0, 0, 0
-
-		with open(self.p.dataset,'r') as filein:
-			for line in filein:
-				train_triples.append([int(x.strip()) for x in line.split()[0:3]])
-				triple_time[count] = [x.split('-')[0] for x in line.split()[3:5]]
-				count+=1
-
-
-		# self.start_time['triple'], self.end_time['triple'] = self.create_year2id(triple_time,'triple')
-
-		with open(self.p.entity2id,'r', encoding="utf-8") as filein2:
-			for line in filein2:
-				# entity_time[int(line.split('\t')[1])]=[x.split()[0] for x in line.split()[2:4]]
-				max_ent = max_ent+1
-
-		self.year2id = self.create_year2id(triple_time)
-		# self.start_time['entity'], self.end_time['entity'] = self.create_year2id(entity_time,'entiy')
-		# self.inp_idx['entity'],self.start_idx['entity'], self.end_idx['entity'] = self.create_id_labels(entity_time,'entity')
-		self.inp_idx['triple'], self.start_idx['triple'], self.end_idx['triple'] = self.create_id_labels(triple_time,'triple')
-		#pdb.set_trace()	
-		for i,ele in enumerate(self.inp_idx['entity']):
-			if self.start_idx['entity'][i] > self.end_idx['entity'][i]:
-				print(self.inp_idx['entity'][i],self.start_idx['entity'][i],self.end_idx['entity'][i])
-		self.num_class = len(self.year2id.keys())
 		
-		# for dtype in ['entity','triple']:
-		# 	self.labels[dtype] = self.getOneHot(self.start_idx[dtype],self.end_idx[dtype], self.num_class)# Representing labels by one hot notation
+		# Load training data.
+		with open(self.p.dataset,'r') as train_data:
+			for i, line in enumerate(train_data):
+				h, r, t, b, e = Helper.parse_quintuple(line)
+				if e != -1:
+					train_triples.append([h,r,t])
+					triple_time[i] = [b, e]
 
-		keep_idx = set(self.inp_idx['triple'])
+		self.max_ent = Helper.get_line_count(self.p.entity2id)
+		self.max_rel = Helper.get_line_count(self.p.relation2id)
+
+		self.year_list, self.year2id = Helper.create_year2id(triple_time)
+		self.num_class = len(self.year2id.keys())
+
+		self.inp_idx, self.start_idx, self.end_idx = Helper.create_id_labels(triple_time, self.year2id)
+		self.num_class = len(self.year2id.keys())
+
+		keep_idx = set(self.inp_idx)
 		for i in range (len(train_triples)-1,-1,-1):
 			if i not in keep_idx:
 				del train_triples[i]
-
-		with open(self.p.relation2id, 'r') as filein3:
-			for line in filein3:
-				max_rel = max_rel +1
-		index = randint(1,len(train_triples))-1
 		
-		posh, rela, post = zip(*train_triples)
-		head, rel, tail = zip(*train_triples)
-
-		posh = list(posh) 
-		post = list(post)
-		rela = list(rela)
-
-		head  =  list(head) 
-		tail  =  list(tail)
-		rel   =  list(rel)
+		posh, rela, post =  map(list, zip(*train_triples))
+		head, rel, tail = map(list, zip(*train_triples))
 
 		for i in range(len(posh)):
-			if self.start_idx['triple'][i] < self.end_idx['triple'][i]:
-				for j in range(self.start_idx['triple'][i] + 1,self.end_idx['triple'][i] + 1):
+			if self.start_idx[i] < self.end_idx[i]:
+				for j in range(self.start_idx[i] + 1,self.end_idx[i] + 1):
 					head.append(posh[i])
 					rel.append(rela[i])
 					tail.append(post[i])
-					self.start_idx['triple'].append(j)
+					self.start_idx.append(j)
 
 		self.ph, self.pt, self.r,self.nh, self.nt , self.triple_time  = [], [], [], [], [], []
 		for triple in range(len(head)):
 			neg_set = set()
 			for k in range(self.p.M):
-				possible_head = randint(0,max_ent-1)
+				possible_head = randint(0,self.max_ent-1)
 				while (possible_head, rel[triple], tail[triple]) in triple_set or (possible_head, rel[triple],tail[triple]) in neg_set:
-					possible_head = randint(0,max_ent-1)
+					possible_head = randint(0,self.max_ent-1)
 				self.nh.append(possible_head)
 				self.nt.append(tail[triple])
 				self.r.append(rel[triple])
 				self.ph.append(head[triple])
 				self.pt.append(tail[triple])
-				self.triple_time.append(self.start_idx['triple'][triple])
+				self.triple_time.append(self.start_idx[triple])
 				neg_set.add((possible_head, rel[triple],tail[triple]))
 		
 		for triple in range(len(tail)):
 			neg_set = set()
 			for k in range(self.p.M):
-				possible_tail = randint(0,max_ent-1)
+				possible_tail = randint(0,self.max_ent-1)
 				while (head[triple], rel[triple],possible_tail) in triple_set or (head[triple], rel[triple],possible_tail) in neg_set:
-					possible_tail = randint(0,max_ent-1)
+					possible_tail = randint(0,self.max_ent-1)
 				self.nh.append(head[triple])
 				self.nt.append(possible_tail)
 				self.r.append(rel[triple])
 				self.ph.append(head[triple])
 				self.pt.append(tail[triple])
-				self.triple_time.append(self.start_idx['triple'][triple])
+				self.triple_time.append(self.start_idx[triple])
 				neg_set.add((head[triple], rel[triple],possible_tail))
 
-		# self.triple_time = triple_time
-		# self.entity_time = entity_time
-		self.max_rel = max_rel
-		self.max_ent = max_ent
 		self.max_time = len(self.year2id.keys())
 		self.data = list(zip(self.ph, self.pt, self.r , self.nh, self.nt, self.triple_time))
 		self.data = self.data + self.data[0:self.p.batch_size]
-
-	def calculated_score_for_positive_elements(self, t, epoch, f_valid, eval_mode='valid'):
-		loss =np.zeros(self.max_ent)
-		start_trip 	= t[3][0].split('-')[0]
-		end_trip 	= t[3][1].split('-')[0]
-		if start_trip == '####':
-			start_trip = YEARMIN
-		elif start_trip.find('#') != -1 or len(start_trip)!=4:
-			return
-
-		if end_trip == '####':
-			end_trip = YEARMAX
-		elif end_trip.find('#')!= -1 or len(end_trip)!=4:
-			return
-			
-		start_lbl, end_lbl = self.get_span_ids(start_trip, end_trip)
-		if eval_mode == 'test':
-			f_valid.write(str(t[0])+'\t'+str(t[1])+'\t'+str(t[2])+'\n')
-		elif eval_mode == 'valid' and epoch == self.p.test_freq:
-			f_valid.write(str(t[0])+'\t'+str(t[1])+'\t'+str(t[2])+'\n')
-
-		pos_head = sess.run(self.pos ,feed_dict = { self.pos_head:  	np.array([t[0]]).reshape(-1,1), 
-												   	self.rel:       	np.array([t[1]]).reshape(-1,1), 
-												   	self.pos_tail:	np.array([t[2]]).reshape(-1,1),
-												   	self.start_year :np.array([start_lbl]*self.max_ent),
-												   	self.end_year : np.array([end_lbl]*self.max_ent),
-												   	self.mode: 			   -1,
-												   	self.pred_mode: 1,
-												   	self.query_mode: 1})
-		pos_head = np.squeeze(pos_head)
-		
-		pos_tail = sess.run(self.pos ,feed_dict = {    self.pos_head:  	np.array([t[0]]).reshape(-1,1), 
-													   self.rel:       	np.array([t[1]]).reshape(-1,1), 
-													   self.pos_tail:	np.array([t[2]]).reshape(-1,1),
-													   self.start_year :np.array([start_lbl]*self.max_ent),
-													   self.end_year : np.array([end_lbl]*self.max_ent),
-													   self.mode: 			   -1, 
-													   self.pred_mode:  -1,
-													   self.query_mode:  1})
-		pos_tail = np.squeeze(pos_tail)
-
-
-		pos_rel = sess.run(self.pos ,feed_dict = {    self.pos_head:  	np.array([t[0]]).reshape(-1,1), 
-													   self.rel:       	np.array([t[1]]).reshape(-1,1), 
-													   self.pos_tail:	np.array([t[2]]).reshape(-1,1),
-													   self.start_year :np.array([start_lbl]*self.max_rel),
-													   self.end_year : np.array([end_lbl]*self.max_rel),
-													   self.mode: 			   -1, 
-													   self.pred_mode: -1,
-													   self.query_mode: -1})
-		pos_rel = np.squeeze(pos_rel)
-
-		return pos_head, pos_tail, pos_rel
 
 	def add_placeholders(self):
 		self.start_year = tf.placeholder(tf.int32, shape=[None], name = 'start_time')
@@ -347,7 +120,6 @@ class HyTE(Model):
 		feed_dict[self.pos_tail] = np.array(pt).reshape(-1,1)
 		feed_dict[self.rel] = np.array(r).reshape(-1,1)
 		feed_dict[self.start_year] = np.array(start_idx)
-		# feed_dict[self.end_year]   = np.array(end_idx)
 		if dtype == 'train':
 			feed_dict[self.neg_head] = np.array(nh).reshape(-1,1)
 			feed_dict[self.neg_tail] = np.array(nt).reshape(-1,1)
@@ -380,7 +152,6 @@ class HyTE(Model):
 
 	
 		## Some transE style model ####
-		
 		neutral = tf.constant(0)      ## mode = 1 for train mode = -1 test
 		test_type = tf.constant(0)    ##  pred_mode = 1 for head -1 for tail
 		query_type = tf.constant(0)   ## query mode  =1 for head tail , -1 for rel
@@ -425,24 +196,36 @@ class HyTE(Model):
 		neg_h_e = tf.squeeze(tf.nn.embedding_lookup(transE_in, self.neg_head))
 		neg_t_e = tf.squeeze(tf.nn.embedding_lookup(transE_in, self.neg_tail))
 
-		if self.p.L1_flag:
-			pos = tf.reduce_sum(abs(pos_h_e + pos_r_e - pos_t_e), 1, keep_dims = True) 
-			neg = tf.reduce_sum(abs(neg_h_e + pos_r_e - neg_t_e), 1, keep_dims = True) 
-			#self.predict = pos
+		if self.p.onlytransE:
+			### TransE model
+			if self.p.L1_flag:
+				pos = tf.reduce_sum(abs(pos_h_e + pos_r_e - pos_t_e), 1, keep_dims = True) 
+				neg = tf.reduce_sum(abs(neg_h_e + pos_r_e - neg_t_e), 1, keep_dims = True) 
+			else:
+				pos = tf.reduce_sum((pos_h_e + pos_r_e - pos_t_e) ** 2, 1, keep_dims = True) 
+				neg = tf.reduce_sum((neg_h_e + pos_r_e - neg_t_e) ** 2, 1, keep_dims = True) 
 		else:
-			pos = tf.reduce_sum((pos_h_e + pos_r_e - pos_t_e) ** 2, 1, keep_dims = True) 
-			neg = tf.reduce_sum((neg_h_e + pos_r_e - neg_t_e) ** 2, 1, keep_dims = True) 
-			#self.predict = pos
-
-		'''
-		debug_nn([self.pred_mode,self.mode], feed_dict = self.create_feed_dict(self.data[0:self.p.batch_size],dtype='test'))
-		'''
+			### Hyte model
+			t_1 = tf.squeeze(tf.nn.embedding_lookup(self.time_embeddings, self.start_year))
+			pos_h_e_t_1 = self.time_projection(pos_h_e,t_1)
+			neg_h_e_t_1 = self.time_projection(neg_h_e,t_1)
+			pos_t_e_t_1 = self.time_projection(pos_t_e,t_1)
+			neg_t_e_t_1 = self.time_projection(neg_t_e,t_1)
+			pos_r_e_t_1 = self.time_projection(pos_r_e,t_1)
+			if self.p.L1_flag:
+				pos = tf.reduce_sum(abs(pos_h_e_t_1 + pos_r_e_t_1 - pos_t_e_t_1), 1, keep_dims = True) 
+				neg = tf.reduce_sum(abs(neg_h_e_t_1 + pos_r_e_t_1 - neg_t_e_t_1), 1, keep_dims = True) 
+			else:
+				pos = tf.reduce_sum((pos_h_e_t_1 + pos_r_e_t_1 - pos_t_e_t_1) ** 2, 1, keep_dims = True) 
+				neg = tf.reduce_sum((neg_h_e_t_1 + pos_r_e_t_1 - neg_t_e_t_1) ** 2, 1, keep_dims = True) 
+		
 		return pos, neg
 
 	def add_loss(self, pos, neg):
 		with tf.name_scope('Loss_op'):
 			loss     = tf.reduce_sum(tf.maximum(pos - neg + self.p.margin, 0))
-			if self.regularizer != None: loss += tf.contrib.layers.apply_regularization(self.regularizer, tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
+			if self.regularizer != None: 
+				loss += tf.contrib.layers.apply_regularization(self.regularizer, tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
 			return loss
 
 	def add_optimizer(self, loss):
@@ -467,7 +250,7 @@ class HyTE(Model):
 		self.summ_writer = None
 		print('model done')
 
-	def run_epoch(self, sess,data,epoch):
+	def run_epoch(self, sess,data):
 		losses = []
 
 		for step, batch in enumerate(self.getBatches(data, shuffle)):
@@ -479,64 +262,39 @@ class HyTE(Model):
 	def fit(self, sess):
 		saver = tf.train.Saver(max_to_keep=None)
 		save_dir = 'checkpoints/' + self.p.name + '/'
-		if not os.path.exists(save_dir): os.makedirs(save_dir)
+		if not os.path.exists(save_dir): 
+			os.makedirs(save_dir)
 		save_dir_results = './results/'+ self.p.name + '/'
-		if not os.path.exists(save_dir_results): os.makedirs(save_dir_results)
+		
+		if not os.path.exists(save_dir_results): 
+			os.makedirs(save_dir_results)
+		
 		if self.p.restore:
-			save_path = os.path.join(save_dir, 'epoch_{}'.format(self.p.restore_epoch))
+			save_path = os.path.join(save_dir, f'epoch_{self.p.restore_epoch}')
 			saver.restore(sess, save_path)
 		
 		if not self.p.onlyTest:
 			print('start fitting')
-			validation_data = self.read_valid(self.p.valid_data)
+			validation_data = Helper.read_data(self.p.valid_data)
+
 			for epoch in range(self.p.max_epochs):
-				l = self.run_epoch(sess,self.data,epoch)
+				l = self.run_epoch(sess,self.data)
 				if epoch%50 == 0:
-					print('Epoch {}\tLoss {}\t model {}'.format(epoch,l,self.p.name))
+					print(f'Epoch {epoch}\tLoss {l}\t model {self.p.name}')
 				
 				if epoch % self.p.test_freq == 0 and epoch != 0:
-					save_path = os.path.join(save_dir, 'epoch_{}'.format(epoch))   ## -- check pointing -- ##
+					## -- check pointing -- ##
+					save_path = os.path.join(save_dir, f'epoch_{epoch}') 
 					saver.save(sess=sess, save_path=save_path)
-					if epoch == self.p.test_freq:
-						f_valid  = open(save_dir_results  +'/valid.txt','w')
 					
-					fileout_head = open(save_dir_results +'/valid_head_pred_{}.txt'.format(epoch),'w')
-					fileout_tail = open(save_dir_results +'/valid_tail_pred_{}.txt'.format(epoch),'w')
-					fileout_rel  = open(save_dir_results +'/valid_rel_pred_{}.txt'.format(epoch), 'w')
-					for i,t in enumerate(validation_data):
-						score = self.calculated_score_for_positive_elements(t, epoch, f_valid, 'valid')
-						if score:
-							fileout_head.write(' '.join([str(x) for x in score[0]]) + '\n')
-							fileout_tail.write(' '.join([str(x) for x in score[1]]) + '\n')
-							fileout_rel.write (' '.join([str(x) for x in score[2]] ) + '\n')
-				
-						if i%500 == 0:
-							print('{}. no of valid_triples complete'.format(i))
+					print("Validation started")
+					Pred.test_link_against(self, sess, "valid", epoch, validation_data)
+					print("Validation ended")
 
-					fileout_head.close()
-					fileout_tail.close()
-					fileout_rel.close()
-					if epoch ==self.p.test_freq:
-						f_valid.close()
-					print("Validation Ended")
 		else:
-			print('start Testing')
-			test_data = self.read_valid(self.p.test_data)
-			f_test  = open(save_dir_results  +'/test.txt','w')
-			fileout_head = open(save_dir_results +'/test_head_pred_{}.txt'.format(self.p.restore_epoch),'w')
-			fileout_tail = open(save_dir_results +'/test_tail_pred_{}.txt'.format(self.p.restore_epoch),'w')
-			fileout_rel  = open(save_dir_results +'/test_rel_pred_{}.txt'.format(self.p.restore_epoch), 'w')
-			for i,t in enumerate(test_data):
-				score = self.calculated_score_for_positive_elements(t, self.p.restore_epoch, f_test, 'test')
-				fileout_head.write(' '.join([str(x) for x in score[0]]) + '\n')
-				fileout_tail.write(' '.join([str(x) for x in score[1]]) + '\n')
-				fileout_rel.write (' '.join([str(x) for x in score[2]] ) + '\n')
-		
-				if i%500 == 0:
-					print('{}. no of test_triples complete'.format(i))
-			fileout_head.close()
-			fileout_tail.close()
-			fileout_rel.close()
+			print('Testing started')
+			test_data = Helper.read_data(self.p.test_data)
+			Pred.test_link_against(self, sess, "test", self.p.restore_epoch, test_data)
 			print("Test ended")
 
 if __name__== "__main__":
@@ -577,7 +335,7 @@ if __name__== "__main__":
 	tf.set_random_seed(args.seed)
 	random.seed(args.seed)
 	np.random.seed(args.seed)
-	set_gpu(args.gpu)
+	Helper.set_gpu(args.gpu)
 	model  = HyTE(args)
 	print('model object created')
 	config = tf.ConfigProto()

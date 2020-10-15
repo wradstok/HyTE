@@ -1,5 +1,6 @@
 
 results/
+temp_scope/
 data/
 checkpoints/
 .vscode/settings.json
