@@ -79,7 +79,7 @@ def temp_test_against(self, sess, data, mode: str, epoch: int):
 		f_valid.close()
 	f_time.close()
 
-def test_link_against(self, sess, mode: str, epoch: int, data):
+def test_link_against(self, sess, data, mode: str, epoch: int):
 	if mode not in ['valid', 'test']:
 		raise ValueError
 	
