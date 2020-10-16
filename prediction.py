@@ -61,7 +61,7 @@ def temp_test_against(self, sess, data, mode: str, epoch: int):
 		pos_time = sess.run(self.pos ,feed_dict = { self.pos_head:  	np.array([quintuple[0]]).reshape(-1,1), 
 													self.rel:       	np.array([quintuple[1]]).reshape(-1,1), 
 													self.pos_tail:	    np.array([quintuple[2]]).reshape(-1,1),
-													self.start_year:    np.array(self.time_steps),
+													self.start_year:    np.array(self.year_list),
 													self.end_year:      np.array([end_lbl]*self.max_ent),
 													self.mode: 			-1,
 													}

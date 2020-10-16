@@ -43,7 +43,8 @@ def approach_3(start: int, end: int, rank_map: Dict[int, int]) -> List:
 	groups = groups[groups[:,1].argsort()]
 
 	# Return rank of the original interval.
-	return 1 + np.where(groups ==  start)[0][0]
+	rank = np.where(groups ==  start)[0][0]
+	return 1 + rank
 	
 
 eval_metrics = {
@@ -61,7 +62,7 @@ def parse_args():
 	return parser.parse_args()
 
 args = parse_args()
-print(args.model)
+print(f"Evaluating {args.model} in {args.mode} mode")
 
 for k in range(args.freq,30000,args.freq):
 	try:

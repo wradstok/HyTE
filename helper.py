@@ -49,7 +49,7 @@ def get_span_ids(start: int, end: int, year2id):
             break
     
     # Find the index of the class in which this triple ends.
-    # If it is max_eyar, none will match, and it will stay the maximum.
+    # If it is max_year none will match, and it will stay the maximum.
     for key,lbl in year2id.items():
         if end >= key[0] and end <= key[1]:
             end_lbl = lbl

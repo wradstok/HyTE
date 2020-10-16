@@ -19,7 +19,7 @@
             "console": "integratedTerminal",
             "args": [
                 "-model",
-                "yago_src_temporal",
+                "yago_src_temporal_tdns",
                 "-test_freq",
                 "500",
                 "-mode",

@@ -57,8 +57,10 @@ class HyTE(Model):
 
         if self.p.sampler == "tdns":
             Sampler.tdns(self, head, rel, tail, triple_set)
-        else:
+        elif self.p.sampler == "tans":
             Sampler.tans(self, head, rel, tail, triple_set)
+        else:
+            raise ValueError
 
     def add_placeholders(self):
         self.start_year = tf.placeholder(tf.int32, shape=[None], name = 'start_time')
@@ -267,7 +269,7 @@ class HyTE(Model):
 if __name__== "__main__":
     parser = argparse.ArgumentParser(description='KG temporal inference using GCN')
 
-    parser.add_argument('-data_type', dest= "data_type", default ='yago', choices = ['yago','wiki_data'], help ='dataset to choose')
+    parser.add_argument('-data_type', dest= "data_type", default ='yago', choices = ['yago','wikidata', 'icews'], help ='dataset to choose')
     parser.add_argument('-version',dest = 'version', default = 'large', help = 'data version to choose')
     parser.add_argument('-test_freq', 	 dest="test_freq", 	default = 25,   	type=int, 	help='Batch size')
     parser.add_argument('-neg_sample', 	 dest="M", 		default = 1,   	type=int, 	help='Batch size')
@@ -287,7 +289,7 @@ if __name__== "__main__":
     parser.add_argument('-restore',	 		 dest="restore", 	    action='store_true', 		help='Restore from the previous best saved model')
     parser.add_argument('-res_epoch',	     dest="restore_epoch", 	default=200,   type =int,		help='Restore from the previous best saved model')
     parser.add_argument("-sampler", dest="sampler", choices=["tans", "tdns"], required=True)
-    parser.add_argument("-mode", dest="mode", choices=["entity","temporal"], default="entity")
+    parser.add_argument("-pred_mode", dest="mode", choices=["entity","temporal"], default="entity")
     
     args = parser.parse_args()
     args.dataset = 'data/'+ args.data_type +'_'+ args.version+'/train.txt'
