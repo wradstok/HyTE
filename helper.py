@@ -38,8 +38,7 @@ def get_line_count(filename: str) -> int:
 
 def get_span_ids(start: int, end: int, year2id):
     # Find the index of the class in which this triple starts.
-    start_lbl = 0,
-    end_lbl = len(year2id.keys()) - 1
+    start_lbl, end_lbl = 0,  len(year2id.keys()) - 1
 
     # Find the index of the class in which this triple starts.
     # If it is min_year, none will match, and the label stays 0.
