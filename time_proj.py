@@ -1,6 +1,6 @@
 from functools import partial
 from models import *
-from random import *
+import random as random
 from collections import defaultdict as ddict
 
 import numpy as np
@@ -183,7 +183,7 @@ class HyTE(Model):
     def run_epoch(self, sess ,data):
         losses = []
 
-        for _, batch in enumerate(self.getBatches(data, shuffle)):
+        for _, batch in enumerate(self.getBatches(data, True)):
             feed = self.create_feed_dict(batch)
             l, _ = sess.run([self.loss, self.train_op], feed_dict = feed)
             losses.append(l)

@@ -1,4 +1,4 @@
-from random import *
+import random as random
 from collections import defaultdict as ddict
 import numpy as np
 
@@ -20,7 +20,7 @@ def tdns(self, head, rel, tail, triple_set):
         sample_time = np.arange(max_time_class)
         head_corrupt = []
         random.shuffle(sample_time)
-        possible_head = randint(0, self.max_ent - 1) # Generate a random entity?
+        possible_head = random.randint(0, self.max_ent - 1) # Generate a random entity?
 
         # Loop over all time periods.
         for z, time in enumerate(sample_time):
@@ -49,7 +49,7 @@ def tdns(self, head, rel, tail, triple_set):
                 neg_set.add((head_corrupt[k], rel[triple_id],tail[triple_id]))
             else:
                 while (possible_head, rel[triple_id], tail[triple_id]) in triple_set or (possible_head, rel[triple_id],tail[triple_id]) in neg_set:
-                    possible_head = randint(0,self.max_ent-1)
+                    possible_head = random.randint(0,self.max_ent-1)
                 self.nh.append(possible_head)
                 self.nt.append(tail[triple_id])
                 self.r.append(rel[triple_id])
@@ -66,7 +66,7 @@ def tdns(self, head, rel, tail, triple_set):
         random.shuffle(sample_time)
         tail_corrupt = []
         
-        possible_tail = randint(0,self.max_ent-1)
+        possible_tail = random.randint(0,self.max_ent-1)
         for z, time in enumerate(sample_time):
             if time == self.start_idx[triple]: 
                 continue
@@ -91,7 +91,7 @@ def tdns(self, head, rel, tail, triple_set):
                 neg_set.add((head[triple], rel[triple],tail_corrupt[k]))
             else:
                 while (head[triple], rel[triple],possible_tail) in triple_set or (head[triple], rel[triple],possible_tail) in neg_set:
-                        possible_tail = randint(0,self.max_ent - 1)
+                        possible_tail = random.randint(0,self.max_ent - 1)
                 self.nh.append(head[triple])
                 self.nt.append(possible_tail)
                 self.r.append(rel[triple])
@@ -111,9 +111,9 @@ def tans(self, head, rel, tail, triple_set):
     for triple in range(len(head)):
         neg_set = set()
         for k in range(self.p.M):
-            possible_head = randint(0,self.max_ent-1)
+            possible_head = random.randint(0,self.max_ent-1)
             while (possible_head, rel[triple], tail[triple]) in triple_set or (possible_head, rel[triple],tail[triple]) in neg_set:
-                possible_head = randint(0,self.max_ent-1)
+                possible_head = random.randint(0,self.max_ent-1)
             self.nh.append(possible_head)
             self.nt.append(tail[triple])
             self.r.append(rel[triple])
@@ -125,9 +125,9 @@ def tans(self, head, rel, tail, triple_set):
     for triple in range(len(tail)):
         neg_set = set()
         for k in range(self.p.M):
-            possible_tail = randint(0,self.max_ent-1)
+            possible_tail = random.randint(0,self.max_ent-1)
             while (head[triple], rel[triple],possible_tail) in triple_set or (head[triple], rel[triple],possible_tail) in neg_set:
-                possible_tail = randint(0,self.max_ent-1)
+                possible_tail = random.randint(0,self.max_ent-1)
             self.nh.append(head[triple])
             self.nt.append(possible_tail)
             self.r.append(rel[triple])
