@@ -1,3 +1,4 @@
+from functools import partial
 from models import *
 from random import *
 from collections import defaultdict as ddict
@@ -70,17 +71,18 @@ class HyTE(Model):
         self.rel      	= tf.placeholder(tf.int32, [None,1])
         self.neg_head 	= tf.placeholder(tf.int32, [None,1])
         self.neg_tail 	= tf.placeholder(tf.int32, [None,1])
-        self.mode 	  	= tf.placeholder(tf.int32, shape = ())
-        self.pred_mode 	= tf.placeholder(tf.int32, shape = ())
-        self.query_mode = tf.placeholder(tf.int32, shape = ())
+        self.mode 	  	= tf.placeholder(tf.int32, shape = ()) # Test or train
+        self.query_mode = tf.placeholder(tf.int32, shape = ()) # Entity or Relation prediction
+        self.pred_mode 	= tf.placeholder(tf.int32, shape = ())  # Head or Tail
 
-    def create_feed_dict(self, batch, wLabels=True,dtype='train'):
+    def create_feed_dict(self, batch, dtype='train'):
         ph, pt, r, nh, nt, start_idx = zip(*batch)
         feed_dict = {}
         feed_dict[self.pos_head] = np.array(ph).reshape(-1,1)
         feed_dict[self.pos_tail] = np.array(pt).reshape(-1,1)
         feed_dict[self.rel] = np.array(r).reshape(-1,1)
         feed_dict[self.start_year] = np.array(start_idx)
+
         if dtype == 'train':
             feed_dict[self.neg_head] = np.array(nh).reshape(-1,1)
             feed_dict[self.neg_tail] = np.array(nt).reshape(-1,1)
@@ -104,54 +106,18 @@ class HyTE(Model):
             self.rel_embeddings = tf.get_variable(name = "rel_embedding",  shape = [self.max_rel, self.p.inp_dim], initializer = tf.contrib.layers.xavier_initializer(uniform = False), regularizer=self.regularizer)
             self.time_embeddings = tf.get_variable(name = "time_embedding",shape = [self.max_time, self.p.inp_dim], initializer = tf.contrib.layers.xavier_initializer(uniform =False))
 
-        transE_in_dim = self.p.inp_dim
-        transE_in     = self.ent_embeddings
-        ####################------------------------ time aware GCN MODEL ---------------------------##############
-    
         ## Some transE style model ####
-        neutral = tf.constant(0)      ## mode = 1 for train mode = -1 test
-        test_type = tf.constant(0)    ##  pred_mode = 1 for head -1 for tail
-        query_type = tf.constant(0)   ## query mode  =1 for head tail , -1 for rel
+        if self.p.mode == "link":
+            f_test = partial(Pred.test_link_prediction, self)
+        elif self.p.mode == "temporal":
+            f_test = partial(Pred.test_temp_prediction, self)
+        else:
+            raise ValueError
         
-        def f_train():
-            pos_h_e = tf.squeeze(tf.nn.embedding_lookup(transE_in, self.pos_head))
-            pos_t_e = tf.squeeze(tf.nn.embedding_lookup(transE_in, self.pos_tail))
-            pos_r_e = tf.squeeze(tf.nn.embedding_lookup(self.rel_embeddings, self.rel))
-            return pos_h_e, pos_t_e, pos_r_e
-        
-        def f_test():
-            def head_tail_query():
-                def f_head():
-                    e2 = tf.squeeze(tf.nn.embedding_lookup(transE_in, self.pos_tail))
-                    pos_h_e = transE_in
-                    pos_t_e = tf.reshape(tf.tile(e2,[self.max_ent]),(self.max_ent, transE_in_dim))
-                    return pos_h_e, pos_t_e
-                
-                def f_tail():
-                    e1 = tf.squeeze(tf.nn.embedding_lookup(transE_in, self.pos_head))
-                    pos_h_e = tf.reshape(tf.tile(e1,[self.max_ent]),(self.max_ent, transE_in_dim))
-                    pos_t_e = transE_in
-                    return pos_h_e, pos_t_e
-
-                pos_h_e, pos_t_e  = tf.cond(self.pred_mode > test_type, f_head, f_tail)
-                r  = tf.squeeze(tf.nn.embedding_lookup(self.rel_embeddings,self.rel))
-                pos_r_e = tf.reshape(tf.tile(r,[self.max_ent]),(self.max_ent,transE_in_dim))
-                return pos_h_e, pos_t_e, pos_r_e
-            
-            def rel_query():
-                e1 = tf.squeeze(tf.nn.embedding_lookup(transE_in, self.pos_head))
-                e2 = tf.squeeze(tf.nn.embedding_lookup(transE_in, self.pos_tail))
-                pos_h_e = tf.reshape(tf.tile(e1,[self.max_rel]),(self.max_rel, transE_in_dim))
-                pos_t_e = tf.reshape(tf.tile(e2,[self.max_rel]),(self.max_rel, transE_in_dim))
-                pos_r_e = self.rel_embeddings
-                return pos_h_e, pos_t_e, pos_r_e
-
-            pos_h_e, pos_t_e, pos_r_e = tf.cond(self.query_mode > query_type, head_tail_query, rel_query)
-            return pos_h_e, pos_t_e, pos_r_e
-
-        pos_h_e, pos_t_e, pos_r_e = tf.cond(self.mode > neutral, f_train, f_test)
-        neg_h_e = tf.squeeze(tf.nn.embedding_lookup(transE_in, self.neg_head))
-        neg_t_e = tf.squeeze(tf.nn.embedding_lookup(transE_in, self.neg_tail))
+        # mode = 1 for train mode = -1 test       
+        pos_h_e, pos_t_e, pos_r_e = tf.cond(self.mode > tf.constant(0), partial(Pred.common_train, self), f_test)
+        neg_h_e = tf.squeeze(tf.nn.embedding_lookup(self.ent_embeddings, self.neg_head))
+        neg_t_e = tf.squeeze(tf.nn.embedding_lookup(self.ent_embeddings, self.neg_tail))
 
         #### ----- time -----###
         
@@ -166,11 +132,12 @@ class HyTE(Model):
         else:
             # Hyte model
             t_1 = tf.squeeze(tf.nn.embedding_lookup(self.time_embeddings, self.start_year))
-            pos_h_e_t_1 = self.time_projection(pos_h_e,t_1)
-            neg_h_e_t_1 = self.time_projection(neg_h_e,t_1)
-            pos_t_e_t_1 = self.time_projection(pos_t_e,t_1)
-            neg_t_e_t_1 = self.time_projection(neg_t_e,t_1)
-            pos_r_e_t_1 = self.time_projection(pos_r_e,t_1)
+
+            pos_h_e_t_1 = self.time_projection(pos_h_e, t_1)
+            neg_h_e_t_1 = self.time_projection(neg_h_e, t_1)
+            pos_t_e_t_1 = self.time_projection(pos_t_e, t_1)
+            neg_t_e_t_1 = self.time_projection(neg_t_e, t_1)
+            pos_r_e_t_1 = self.time_projection(pos_r_e, t_1)
 
             if self.p.L1_flag:
                 pos = tf.reduce_sum(abs(pos_h_e_t_1 + pos_r_e_t_1 - pos_t_e_t_1), 1, keep_dims = True) 
@@ -206,7 +173,7 @@ class HyTE(Model):
         self.load_data()
         self.nbatches = len(self.data) // self.p.batch_size
         self.add_placeholders()
-        self.pos, neg = self.add_model()
+        self.pos, neg= self.add_model()
         self.loss      	= self.add_loss(self.pos, neg)
         self.train_op  	= self.add_optimizer(self.loss)
         self.merged_summ = tf.summary.merge_all()

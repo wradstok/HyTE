@@ -1,5 +1,47 @@
 import helper as Helper
 import numpy as np
+import tensorflow as tf
+
+def common_train(self):
+	""" Training function shared between both link prediction and temporal prediction. """
+	pos_h_e = tf.squeeze(tf.nn.embedding_lookup(self.ent_embeddings, self.pos_head))
+	pos_t_e = tf.squeeze(tf.nn.embedding_lookup(self.ent_embeddings, self.pos_tail))
+	pos_r_e = tf.squeeze(tf.nn.embedding_lookup(self.rel_embeddings, self.rel))
+	return pos_h_e, pos_t_e, pos_r_e
+
+def test_link_prediction(self):
+	""" Test the link prediction performance of the model. If self.pred-mode == 1 we test 
+		head prediction performance. If self.pred_mode == -1 we test tail prediction perf."""
+	def f_head():
+		e2 = tf.squeeze(tf.nn.embedding_lookup(self.ent_embeddings, self.pos_tail))
+		pos_h_e = self.ent_embeddings
+		pos_t_e = tf.reshape(tf.tile(e2,[self.max_ent]),(self.max_ent, self.p.inp_dim))
+		return pos_h_e, pos_t_e
+		
+	def f_tail():
+		e1 = tf.squeeze(tf.nn.embedding_lookup(self.ent_embeddings, self.pos_head))
+		pos_h_e = tf.reshape(tf.tile(e1,[self.max_ent]),(self.max_ent, self.p.inp_dim))
+		pos_t_e = self.ent_embeddings
+		return pos_h_e, pos_t_e
+
+	##  pred_mode = 1 for head -1 for tail
+	neutral = tf.constant(0)
+	pos_h_e, pos_t_e  = tf.cond(self.pred_mode > neutral, f_head, f_tail)
+	r  = tf.squeeze(tf.nn.embedding_lookup(self.rel_embeddings,self.rel))
+	pos_r_e = tf.reshape(tf.tile(r,[self.max_ent]),(self.max_ent,self.p.inp_dim))
+	return pos_h_e, pos_t_e, pos_r_e
+
+def test_temp_prediction(self):	
+	""" Test temporal prediction of the model. """
+	e1 = tf.squeeze(tf.nn.embedding_lookup(self.ent_embeddings, self.pos_head))
+	pos_h_e = tf.reshape(tf.tile(e1,[self.max_time]),(self.max_time, self.p.inp_dim))
+
+	e2 = tf.squeeze(tf.nn.embedding_lookup(self.ent_embeddings, self.pos_tail))
+	pos_t_e = tf.reshape(tf.tile(e2,[self.max_time]),(self.max_time, self.p.inp_dim))
+
+	r  = tf.squeeze(tf.nn.embedding_lookup(self.rel_embeddings,self.rel))
+	pos_r_e = tf.reshape(tf.tile(r,[self.max_time]),(self.max_time,self.p.inp_dim))
+	return pos_h_e, pos_t_e, pos_r_e
 
 def calculated_score_for_positive_elements(self, sess, quintuple, epoch, f_valid, eval_mode='valid'):
     start_lbl, end_lbl = Helper.get_span_ids(quintuple[3], quintuple[4], self.year2id)
@@ -29,11 +71,11 @@ def calculated_score_for_positive_elements(self, sess, quintuple, epoch, f_valid
 
 
     pos_rel = sess.run(self.pos ,feed_dict = {    self.pos_head:  	np.array([quintuple[0]]).reshape(-1,1), 
-                                                    self.rel:       	np.array([quintuple[1]]).reshape(-1,1), 
+                                                    self.rel:      	np.array([quintuple[1]]).reshape(-1,1), 
                                                     self.pos_tail:	np.array([quintuple[2]]).reshape(-1,1),
-                                                    self.start_year :np.array([start_lbl]*self.max_rel),
+                                                    self.start_year:np.array([start_lbl]*self.max_rel),
                                                     self.end_year : np.array([end_lbl]*self.max_rel),
-                                                    self.mode: 			   -1, 
+                                                    self.mode: 	 	-1, 
                                                     self.pred_mode: -1,
                                                     self.query_mode: -1})
     pos_rel = np.squeeze(pos_rel)
@@ -58,13 +100,14 @@ def temp_test_against(self, sess, data, mode: str, epoch: int):
 		if epoch == self.p.test_freq:
 			f_valid.write(str(start_lbl)+'\t'+str(end_lbl)+'\n')
 
-		pos_time = sess.run(self.pos ,feed_dict = { self.pos_head:  	np.array([quintuple[0]]).reshape(-1,1), 
+		pos_time = sess.run(self.pos, feed_dict = { self.pos_head:  	np.array([quintuple[0]]).reshape(-1,1), 
 													self.rel:       	np.array([quintuple[1]]).reshape(-1,1), 
 													self.pos_tail:	    np.array([quintuple[2]]).reshape(-1,1),
-													self.start_year:    np.array(self.year_list),
+													self.start_year:    np.array(sorted(self.year2id.values())),
 													self.end_year:      np.array([end_lbl]*self.max_ent),
-													self.mode: 			-1,
-													}
+                                                    self.mode: 	 	-1, 
+                                                    self.query_mode: 1
+												  }
 							)
 
 
