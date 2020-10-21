@@ -47,10 +47,10 @@ def approach_3(start: int, end: int, rank_map: Dict[int, int]) -> List:
 
     penalty = len(rank_map) / len(groups)
 
-    # Return rank of the original interval.
-    rank = 1 + np.where(groups == start)[0][0]
+    # Return rank of the original interval. This rank is zero based
+    rank = np.where(groups == start)[0][0]
     rank_corrected = rank * penalty
-    return rank_corrected
+    return 1 + rank_corrected
 
 
 eval_metrics = {
