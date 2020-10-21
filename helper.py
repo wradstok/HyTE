@@ -145,11 +145,11 @@ def parse_quintuple(line: str, granularity: str):
     return (h, r, t, b, e)
 
 
-def read_data(filename: str):
+def read_data(filename: str, granularity: str):
     triples = []
     with open(filename, "r") as filein:
         for line in filein:
-            (h, r, t, b, e) = parse_quintuple(line)
+            (h, r, t, b, e) = parse_quintuple(line, granularity)
             if b != -1 and e != -1:
                 triples.append([h, r, t, b, e])
 

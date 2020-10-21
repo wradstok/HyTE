@@ -217,7 +217,7 @@ class HyTE(Model):
 
         if not self.p.onlyTest:
             print("Start fitting")
-            validation_data = Helper.read_data(self.p.valid_data)
+            validation_data = Helper.read_data(self.p.valid_data, self.p.granularity)
 
             for epoch in range(self.p.max_epochs):
                 loss = self.run_epoch(sess, self.data)
@@ -241,7 +241,7 @@ class HyTE(Model):
                     print("Validation ended")
         else:
             print("Testing started")
-            test_data = Helper.read_data(self.p.test_data)
+            test_data = Helper.read_data(self.p.test_data, self.p.granularity)
             if self.p.mode == "temporal":
                 Pred.temp_test_against(self, sess, test_data, "test", self.p.restore_epoch)
             elif self.p.mode == "entity":
