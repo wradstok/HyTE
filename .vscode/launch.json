@@ -19,24 +19,24 @@
             "console": "integratedTerminal",
             "args": [
                 "-model",
-                "yago_src_temporal_tdns",
+                "icews14_temp_tans",
                 "-test_freq",
                 "500",
                 "-mode",
                 "test",
                 "-eval_metric",
-                "3"
+                "original"
             ]
         },
         {
-            "name": "time_proj_tdns_scope",
+            "name": "time proj temporal",
             "type": "python",
             "request": "launch",
-            "program": "${workspaceFolder}\\time_proj_tdns_scope.py",
+            "program": "${workspaceFolder}\\time_proj.py",
             "console": "integratedTerminal",
             "args": [
                 "-name",
-                "yago_src_temporal",
+                "yago_temp_tans",
                 "-margin",
                 "10",
                 "-l2",
@@ -51,10 +51,16 @@
                 "src",
                 "-test_freq",
                 "500",
-                "-res_epoch",
-                "500",
-                "-onlyTest",
-                "-restore",
+                "-sampler",
+                "tans",
+                "-pred_mode",
+                "temporal",
+                // "-granularity",
+                // "day"
+                // "-onlyTest",
+                // "-restore",
+                // "-res_epoch",
+                // "500"
             ]
         },
         {
@@ -72,30 +78,5 @@
                 "icews_intra"
             ],
         },
-        {
-            "name": "time_proj icews_large",
-            "type": "python",
-            "request": "launch",
-            "program": "${workspaceFolder}\\time_proj.py",
-            "console": "integratedTerminal",
-            "args": [
-                "-name",
-                "icews_large",
-                "-margin",
-                "10",
-                "-l2",
-                "0.00",
-                "-neg_sample",
-                "5",
-                "-epoch",
-                "501",
-                "-data_type",
-                "icews14",
-                "-version",
-                "large",
-                "-test_freq",
-                "500"
-            ]
-        }
     ]
 }
