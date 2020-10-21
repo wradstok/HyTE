@@ -45,9 +45,12 @@ def approach_3(start: int, end: int, rank_map: Dict[int, int]) -> List:
     groups = np.array(groups)
     groups = groups[groups[:, 1].argsort()]
 
+    penalty = len(rank_map) / len(groups)
+
     # Return rank of the original interval.
-    rank = np.where(groups == start)[0][0]
-    return 1 + rank
+    rank = 1 + np.where(groups == start)[0][0]
+    rank_corrected = rank * penalty
+    return rank_corrected
 
 
 eval_metrics = {
@@ -61,18 +64,10 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Eval model outputs")
     parser.add_argument("-model", dest="model", required=True, help="Dataset to use")
     parser.add_argument(
-        "-mode",
-        dest="mode",
-        required=True,
-        choices=["valid", "test"],
-        help="Run for validation or test set",
+        "-mode", dest="mode", required=True, choices=["valid", "test"], help="Run for validation or test set",
     )
     parser.add_argument(
-        "-test_freq",
-        dest="freq",
-        required=True,
-        type=int,
-        help="what is to be predicted",
+        "-test_freq", dest="freq", required=True, type=int, help="what is to be predicted",
     )
     parser.add_argument(
         "-eval_metric",
