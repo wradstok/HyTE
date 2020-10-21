@@ -2,7 +2,7 @@ from typing import List
 import numpy as np, os
 from collections import Counter
 import io
-from datetime import datetime
+import datetime
 
 YEARMIN = -50
 YEARMAX = 3000
@@ -132,9 +132,10 @@ def parse_quintuple(line: str, granularity: str):
         elif granularity == "day":
             if time.find("#") != -1:
                 raise ValueError("Day granularity only works when all days are specified.")
-            return datetime.fromisoformat(time).timetuple().tm_yday
+            time = list(map(int, time.split("-")))
+            return datetime.date(time[0], time[1], time[2]).timetuple().tm_yday
         else:
-            raise ValueError("Unknown granularity level")
+            raise ValueError("Unknown granularity level.")
 
     b = parse_time(b, YEARMIN, granularity)
     e = parse_time(e, YEARMAX, granularity)

@@ -41,7 +41,7 @@ class HyTE(Model):
         train_triples, triple_time = [], ddict()
         with open(self.p.dataset, "r") as train_data:
             for i, line in enumerate(train_data):
-                h, r, t, b, e = Helper.parse_quintuple(line)
+                h, r, t, b, e = Helper.parse_quintuple(line, self.p.granularity)
                 if e != -1:
                     train_triples.append([h, r, t])
                     triple_time[i] = [b, e]
