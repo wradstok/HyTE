@@ -22,7 +22,7 @@ def approach_2(start: int, end: int, rank_map: Dict[int, int]) -> List:
         rank, _ = rank_map[time]
         ranks.append(rank)
 
-    interval = end - start + 1
+    interval = len(ranks)
     penalty = interval * ((1 + interval) / 2)
     res = np.sum(ranks) / penalty
     return res
@@ -37,7 +37,7 @@ def approach_3(start: int, end: int, rank_map: Dict[int, int]) -> List:
     groups = []
     for time in range(0, len(rank_map) - interval_size):
         score_sum = 0
-        for offset in range(0, interval_size):
+        for offset in range(0, interval_size + 1):
             score_sum += rank_map[time + offset][1]
         groups.append((time, score_sum))
 
